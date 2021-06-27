@@ -4,6 +4,12 @@
 #include <esp_log.h>
 #include <memory.h>
 
+#if CONFIG_BUTTON_ISR_IN_IRAM
+#define BUTTON_IRAM_ATTR IRAM_ATTR
+#else
+#define BUTTON_IRAM_ATTR
+#endif
+
 static const char TAG[] = "button";
 
 ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
@@ -116,7 +122,7 @@ static void button_timer_handler(void *arg)
     gpio_intr_enable(pin);
 }
 
-static void IRAM_ATTR button_interrupt_handler(void *arg)
+static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
 {
     // Dereference
     gpio_num_t pin = (size_t)arg; // pin stored directly as the pointer

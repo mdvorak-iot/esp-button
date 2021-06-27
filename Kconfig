@@ -12,5 +12,9 @@ menu "esp-button"
         help
             Disable to remove long-press logic completely, saving few bytes in the IRAM.
 
-    # TODO optional IRAM
+    config BUTTON_ISR_IN_IRAM
+        bool "ISR in IRAM"
+        default n
+        help
+            When GPIO interrupt service is initialized with ESP_INTR_FLAG_IRAM, handlers needs to be in IRAM.
 endmenu
