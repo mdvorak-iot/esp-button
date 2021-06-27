@@ -5,12 +5,18 @@ menu "Example config"
         help
             Button 0 is often on dev board for boot mode selection.
 
+    config EXAMPLE_BUTTON_MODE
+        int  "Test button event reporting mode"
+        default 0
+        help
+            0 for on-release, 1 for on-press.
+
     config EXAMPLE_BUTTON_INTERNAL_PULL
         bool "Test button internal pull-up/down"
         default n # Not needed for GPIO0
 
-    config EXAMPLE_BUTTON_MODE
-        int  "Test button mode"
+    config EXAMPLE_BUTTON_LEVEL
+        int  "Test button pressed level"
         default 0
         help
             0 for low-on-push, 1 for high-on-push.

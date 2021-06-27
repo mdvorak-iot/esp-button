@@ -5,7 +5,7 @@
 static const char TAG[] = "example";
 
 #define EXAMPLE_BUTTON_PIN CONFIG_EXAMPLE_BUTTON_PIN
-#define EXAMPLE_BUTTON_MODE CONFIG_EXAMPLE_BUTTON_MODE
+#define EXAMPLE_BUTTON_LEVEL CONFIG_EXAMPLE_BUTTON_LEVEL
 #if CONFIG_EXAMPLE_BUTTON_INTERNAL_PULL
 #define EXAMPLE_BUTTON_INTERNAL_PULL 1
 #else
@@ -21,11 +21,11 @@ void app_main()
     struct button_config btn_cfg = {
         .pin = EXAMPLE_BUTTON_PIN,
         .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
-        .mode = EXAMPLE_BUTTON_MODE,
+        .level = EXAMPLE_BUTTON_LEVEL,
 #if CONFIG_BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = 3000,
 #endif
-        .long_press_mode = BUTTON_LONG_PRESS_ON_RELEASE, // TODO in Kconfig as well, after refactor
+        .mode = BUTTON_MODE_ON_RELEASE, // TODO in Kconfig as well, after refactor
     };
     ESP_ERROR_CHECK(button_config(&btn_cfg));
 

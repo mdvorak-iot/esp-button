@@ -10,11 +10,11 @@ ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
 
 struct button_state
 {
+    enum button_level level;
     enum button_mode mode;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
-    enum button_long_press_mode long_press_mode;
     esp_event_loop_handle_t event_loop;
     esp_timer_handle_t timer;
     volatile int64_t press_start;
@@ -25,7 +25,7 @@ static struct button_state *button_states[GPIO_NUM_MAX] = {};
 
 inline static bool IRAM_ATTR is_pressed(const struct button_state *state, int level)
 {
-    return level == state->mode;
+    return level == state->level;
 }
 
 inline static bool is_long_press(const struct button_state *state, int64_t press_length_ms)
@@ -93,7 +93,7 @@ static void button_timer_handler(void *arg)
         on_release(pin, state, now);
     }
 #if BUTTON_LONG_PRESS_ENABLE
-    else if (state->long_press_mode == BUTTON_LONG_PRESS_IMMEDIATELY && state->long_press_ms > BUTTON_DEBOUNCE_MS)
+    else if (state->mode == BUTTON_MODE_ON_PRESS && state->long_press_ms > BUTTON_DEBOUNCE_MS)
     {
         // Start timer again, that will fire long-press event, even when button is not released yet
         esp_timer_start_once(state->timer, (state->long_press_ms - BUTTON_DEBOUNCE_MS) * 1000);
@@ -153,8 +153,8 @@ esp_err_t button_config(const struct button_config *cfg)
         .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = BIT64(cfg->pin),
         .intr_type = GPIO_INTR_ANYEDGE,
-        .pull_up_en = (cfg->internal_pull && cfg->mode == BUTTON_MODE_LOW_ON_PRESS) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
-        .pull_down_en = (cfg->internal_pull && cfg->mode == BUTTON_MODE_HIGH_ON_PRESS) ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_LOW_ON_PRESS) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
+        .pull_down_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_HIGH_ON_PRESS) ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
     };
 
     esp_err_t err = gpio_config(&gpio_cfg);
@@ -182,8 +182,8 @@ esp_err_t button_config(const struct button_config *cfg)
             return err;
         }
     }
+    state->level = cfg->level;
     state->mode = cfg->mode;
-    state->long_press_mode = cfg->long_press_mode;
 #if BUTTON_LONG_PRESS_ENABLE
     state->long_press_ms = cfg->long_press_ms;
 #endif

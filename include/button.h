@@ -19,17 +19,16 @@ enum button_event
     BUTTON_EVENT_ACTION,
 };
 
-// TODO
-enum button_long_press_mode
+enum button_level
 {
-    BUTTON_LONG_PRESS_ON_RELEASE,
-    BUTTON_LONG_PRESS_IMMEDIATELY,
+    BUTTON_LEVEL_LOW_ON_PRESS = 0,
+    BUTTON_LEVEL_HIGH_ON_PRESS = 1,
 };
 
 enum button_mode
 {
-    BUTTON_MODE_LOW_ON_PRESS = 0,
-    BUTTON_MODE_HIGH_ON_PRESS = 1,
+    BUTTON_MODE_ON_RELEASE,
+    BUTTON_MODE_ON_PRESS,
 };
 
 struct button_data
@@ -44,11 +43,11 @@ struct button_data
 struct button_config
 {
     gpio_num_t pin;
+    enum button_level level;
     enum button_mode mode;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
-    enum button_long_press_mode long_press_mode;
     bool internal_pull;
     esp_event_loop_handle_t event_loop;
 };
