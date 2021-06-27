@@ -31,7 +31,7 @@ inline static bool IRAM_ATTR is_pressed(const struct button_state *state, int le
 inline static bool is_long_press(const struct button_state *state, int64_t press_length_ms)
 {
 #if BUTTON_LONG_PRESS_ENABLE
-    return (press_length_ms >= state->long_press_ms);
+    return (state->long_press_ms > 0) && (press_length_ms >= state->long_press_ms);
 #else
     return false;
 #endif
@@ -71,7 +71,7 @@ static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
     state->pressed = false;
 }
 
-static void debounce_timer_handler(void *arg)
+static void button_timer_handler(void *arg)
 {
     gpio_num_t pin = (size_t)arg; // pin stored directly as the pointer
     struct button_state *state = button_states[pin];
@@ -165,7 +165,7 @@ esp_err_t button_config(const struct button_config *cfg)
         memset(state, 0, sizeof(*state));
 
         esp_timer_create_args_t timer_cfg = {
-            .callback = debounce_timer_handler,
+            .callback = button_timer_handler,
             .arg = (void *)cfg->pin,
             .name = "button",
         };

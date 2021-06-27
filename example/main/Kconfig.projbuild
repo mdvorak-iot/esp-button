@@ -1,0 +1,17 @@
+menu "Example config"
+    config EXAMPLE_BUTTON_PIN
+        int "Test button PIN"
+        default 0
+        help
+            Button 0 is often on dev board for boot mode selection.
+
+    config EXAMPLE_BUTTON_INTERNAL_PULL
+        bool "Test button internal pull-up/down"
+        default n # Not needed for GPIO0
+
+    config EXAMPLE_BUTTON_MODE
+        int  "Test button mode"
+        default 0
+        help
+            0 for low-on-push, 1 for high-on-push.
+endmenu
