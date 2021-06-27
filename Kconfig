@@ -1,8 +1,16 @@
 # Custom component config
-menu "esp-lib-template"
-    config LIB_EXAMPLE
-        int "Example variable"
-        default 0
+menu "esp-button"
+    config BUTTON_DEBOUNCE_MS
+        int "Debounce interval (ms)"
+        default 50
         help
-            Just example, remove this.
+            In certain configs (including default), event might be also delayed by this value.
+
+    config BUTTON_LONG_PRESS_ENABLE
+        bool "Long-press support"
+        default y
+        help
+            Disable to remove long-press logic completely, saving few bytes in the IRAM.
+
+    # TODO optional IRAM
 endmenu

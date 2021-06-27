@@ -1,6 +1,6 @@
-name: "lib_template"
+name: "button"
 description: TODO description.
-url: https://github.com/mdvorak-iot/esp-lib-template.git
+url: https://github.com/mdvorak-iot/esp-button.git
 targets:
   - esp32
 dependencies:

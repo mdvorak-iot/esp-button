@@ -1,21 +1,21 @@
-# esp-lib-template
+# esp-button
 
-![platformio build](https://github.com/mdvorak-iot/esp-lib-template/workflows/platformio%20build/badge.svg)
+![platformio build](https://github.com/mdvorak-iot/esp-button/workflows/platformio%20build/badge.svg)
 
-TODO Description
+Button handler, with software debounce logic and long-press support.
 
 ## Usage
 
 To reference this library by your project, add it as git submodule, using command
 
 ```shell
-git submodule add https://github.com/mdvorak-iot/esp-lib-template.git components/lib_template
+git submodule add https://github.com/mdvorak-iot/esp-button.git components/button
 ```
 
 and include either of the header files
 
 ```c
-#include <lib.h>
+#include <button.h>
 ```
 
-For full example, see [lib_template_example_main.c](./example/main/lib_template_example_main.c).
+For full example, see [button_example_main.c](example/main/button_example_main.c).

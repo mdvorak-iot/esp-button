@@ -1,10 +1,10 @@
 {
-    "name": "esp-lib-template",
+    "name": "esp-button",
     "description": "TODO",
     "keywords": "esp esp32",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mdvorak-iot/esp-lib-template.git"
+        "url": "https://github.com/mdvorak-iot/esp-button.git"
     },
     "authors": [
         {
