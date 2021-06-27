@@ -61,9 +61,16 @@ static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
 #endif
     };
 
+    // Log
+    // TODO make these debug
+#if BUTTON_LONG_PRESS_ENABLE
+    ESP_DRAM_LOGI("button", "released pin %d after %d ms (long=%d)", pin, data.press_length_ms, data.long_press);
+#else
+    ESP_DRAM_LOGI("button", "released pin %d after %d ms", pin, data.press_length_ms);
+#endif
+
     // Queue event
     // TODO
-    ESP_DRAM_LOGI("button", "released pin %d after %d ms (long=%d)", pin, data.press_length_ms, data.long_press);
     //esp_event_isr_post_to(state->event_loop, BUTTON_EVENT, BUTTON_EVENT_ACTION, &data, sizeof(data), NULL);
 
     // Reset press start, in case of rare race-condition of the timer and ISR

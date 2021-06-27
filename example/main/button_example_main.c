@@ -22,7 +22,9 @@ void app_main()
         .pin = EXAMPLE_BUTTON_PIN,
         .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
         .mode = EXAMPLE_BUTTON_MODE,
+#if CONFIG_BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = 3000,
+#endif
         .long_press_mode = BUTTON_LONG_PRESS_ON_RELEASE, // TODO in Kconfig as well, after refactor
     };
     ESP_ERROR_CHECK(button_config(&btn_cfg));
