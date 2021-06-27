@@ -37,6 +37,19 @@ inline static bool is_long_press(const struct button_state *state, int64_t press
 #endif
 }
 
+static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id,
+                                       struct button_data *event_data)
+{
+    if (event_loop)
+    {
+        return esp_event_isr_post_to(event_loop, BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
+    }
+    else
+    {
+        return esp_event_isr_post(BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
+    }
+}
+
 static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
 {
     // Already handled
@@ -70,8 +83,7 @@ static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
 #endif
 
     // Queue event
-    // TODO
-    //esp_event_isr_post_to(state->event_loop, BUTTON_EVENT, BUTTON_EVENT_ACTION, &data, sizeof(data), NULL);
+    button_event_isr_post(state->event_loop, BUTTON_EVENT_ACTION, &data);
 
     // Reset press start, in case of rare race-condition of the timer and ISR
     state->press_start = now;
