@@ -33,16 +33,13 @@ inline static bool BUTTON_IRAM_ATTR is_pressed(const struct button_context *ctx,
     return level == ctx->level;
 }
 
+#if BUTTON_LONG_PRESS_ENABLE
 inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *ctx, int64_t press_length_ms)
 {
     assert(ctx);
-
-#if BUTTON_LONG_PRESS_ENABLE
     return (ctx->long_press_ms > 0) && (press_length_ms >= ctx->long_press_ms);
-#else
-    return false;
-#endif
 }
+#endif
 
 static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
 {
@@ -61,7 +58,7 @@ static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t 
 static void BUTTON_IRAM_ATTR handle_button(struct button_context *ctx, int64_t now, int32_t event_id)
 {
     assert(ctx);
-    ESP_DRAM_LOGD(TAG, "handle pin %d {now=%lld, press_start=%lld, event_id=%d}", now, ctx->press_start, event_id);
+    ESP_DRAM_LOGD(TAG, "handle pin %d {now=%lld, press_start=%lld, event_id=%d}", ctx->pin, now, ctx->press_start, event_id);
 
     // Press length
     int64_t press_length_ms = (now - ctx->press_start) / 1000L; // us to ms
@@ -111,12 +108,12 @@ static void button_timer_handler(void *arg)
             ESP_LOGD(TAG, "failed to take on %d from timer", ctx->pin);
         }
     }
+#if BUTTON_LONG_PRESS_ENABLE
     else if (is_long_press(ctx, press_length_ms))
     {
         // Fire long-press event
         handle_button(ctx, now, BUTTON_EVENT_PRESS);
     }
-#if BUTTON_LONG_PRESS_ENABLE
     else if (ctx->long_press_ms > BUTTON_DEBOUNCE_MS)
     {
         // Start timer again, that will fire long-press event, even when button is not released yet
