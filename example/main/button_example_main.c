@@ -11,6 +11,7 @@ static const char TAG[] = "example";
 #else
 #define EXAMPLE_BUTTON_INTERNAL_PULL 0
 #endif
+#define EXAMPLE_BUTTON_LONG_PRESS_MS CONFIG_EXAMPLE_BUTTON_LONG_PRESS_MS
 
 void app_main()
 {
@@ -22,7 +23,7 @@ void app_main()
         .pin = EXAMPLE_BUTTON_PIN,
         .level = EXAMPLE_BUTTON_LEVEL,
 #if CONFIG_BUTTON_LONG_PRESS_ENABLE
-        .long_press_ms = 3000,
+        .long_press_ms = EXAMPLE_BUTTON_LONG_PRESS_MS,
 #endif
         .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
     };
