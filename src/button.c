@@ -104,14 +104,16 @@ static void button_timer_handler(void *arg)
     gpio_intr_enable(ctx->pin);
     ESP_LOGD(TAG, "%d intr enabled", ctx->pin);
 
-    // Get current GPIO state
-    int level = gpio_get_level(ctx->pin);
+    // WARNING portEXIT_CRITICAL is always called in both if-else clauses
+    portENTER_CRITICAL(&button_mux);
+
+    // Get current state
     int64_t now = esp_timer_get_time();
+    int level = gpio_get_level(ctx->pin);
 
     // Handle
     if (!is_pressed(ctx, level))
     {
-        portENTER_CRITICAL(&button_mux);
         bool released = false;
         struct button_state local_state;
 
@@ -123,7 +125,7 @@ static void button_timer_handler(void *arg)
             local_state = ctx->state;
             released = true;
         }
-        portEXIT_CRITICAL(&button_mux);
+        portEXIT_CRITICAL(&button_mux); // NOTE portENTER_CRITICAL before if
 
         // Check if button wasn't already released and handled
         if (released)
@@ -139,10 +141,9 @@ static void button_timer_handler(void *arg)
 #if BUTTON_LONG_PRESS_ENABLE
     else
     {
-        portENTER_CRITICAL(&button_mux);
         // Copy state safely
         struct button_state local_state = ctx->state;
-        portEXIT_CRITICAL(&button_mux);
+        portEXIT_CRITICAL(&button_mux); // NOTE portENTER_CRITICAL before if
 
         if (local_state.pressed)
         {
@@ -176,18 +177,20 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     struct button_context *ctx = (struct button_context *)arg;
     assert(ctx);
 
-    // Current state
-    int64_t now = esp_timer_get_time();
-    int level = gpio_get_level(ctx->pin);
-
     // No further interrupts till timer has finished
     gpio_intr_disable(ctx->pin);
     ESP_DRAM_LOGD(TAG, "%d intr disabled", ctx->pin);
 
+    // WARNING portEXIT_CRITICAL_ISR is always called in both if-else clauses
+    portENTER_CRITICAL_ISR(&button_mux);
+
+    // Current state
+    int64_t now = esp_timer_get_time();
+    int level = gpio_get_level(ctx->pin);
+
     if (is_pressed(ctx, level))
     {
         // NOTE since this is edge handler, button was just pressed
-        portENTER_CRITICAL_ISR(&button_mux);
         bool pressed = false;
         struct button_state local_state;
 
@@ -201,7 +204,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
             local_state = ctx->state;
             pressed = true;
         }
-        portEXIT_CRITICAL(&button_mux);
+        portEXIT_CRITICAL_ISR(&button_mux); // NOTE portENTER_CRITICAL_ISR before if
 
         // Handle outside mutex
         if (pressed)
@@ -217,7 +220,6 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     else
     {
         // NOTE since this is edge handler, button was just released
-        portENTER_CRITICAL_ISR(&button_mux);
         bool released = false;
         struct button_state local_state;
 
@@ -229,7 +231,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
             local_state = ctx->state;
             released = true;
         }
-        portEXIT_CRITICAL(&button_mux);
+        portEXIT_CRITICAL_ISR(&button_mux); // NOTE portENTER_CRITICAL_ISR before if
 
         // Handle outside mutex
         if (released)
