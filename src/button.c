@@ -23,17 +23,20 @@ struct button_context
 #endif
     esp_event_loop_handle_t event_loop;
     esp_timer_handle_t timer;
-    SemaphoreHandle_t pressed_handle;
+    SemaphoreHandle_t pressed_handle; // NOTE using semaphore here as atomic bool, not directly as a synchronization mechanism
     volatile int64_t press_start;
 };
 
 inline static bool BUTTON_IRAM_ATTR is_pressed(const struct button_context *ctx, int level)
 {
+    assert(ctx);
     return level == ctx->level;
 }
 
 inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *ctx, int64_t press_length_ms)
 {
+    assert(ctx);
+
 #if BUTTON_LONG_PRESS_ENABLE
     return (ctx->long_press_ms > 0) && (press_length_ms >= ctx->long_press_ms);
 #else
@@ -43,6 +46,8 @@ inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *c
 
 static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
 {
+    assert(event_data);
+
     if (event_loop)
     {
         return esp_event_isr_post_to(event_loop, BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
@@ -55,6 +60,9 @@ static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t 
 
 static void BUTTON_IRAM_ATTR handle_button(struct button_context *ctx, int64_t now, int32_t event_id)
 {
+    assert(ctx);
+    ESP_DRAM_LOGD(TAG, "handle pin %d {now=%lld, press_start=%lld, event_id=%d}", now, ctx->press_start, event_id);
+
     // Press length
     int64_t press_length_ms = (now - ctx->press_start) / 1000L; // us to ms
 
@@ -69,9 +77,9 @@ static void BUTTON_IRAM_ATTR handle_button(struct button_context *ctx, int64_t n
     };
 
     // Log
-    const char *log_event = (event_id == BUTTON_EVENT_PRESS) ? DRAM_STR("pressed") : DRAM_STR("released");
+    const char *log_event_str = (event_id == BUTTON_EVENT_PRESS) ? DRAM_STR("pressed") : DRAM_STR("released");
 #if BUTTON_LONG_PRESS_ENABLE
-    ESP_DRAM_LOGI(TAG, "%s pin %d after %d ms (long=%d)", log_event, ctx->pin, data.press_length_ms, data.long_press);
+    ESP_DRAM_LOGI(TAG, "%s pin %d after %d ms {long=%d}", log_event_str, ctx->pin, data.press_length_ms, data.long_press);
 #else
     ESP_DRAM_LOGI(TAG, "%s pin %d after %d ms", log_event, state->pin, data.press_length_ms);
 #endif
@@ -84,6 +92,7 @@ static void button_timer_handler(void *arg)
 {
     // Dereference
     struct button_context *ctx = (struct button_context *)arg;
+    assert(ctx);
 
     int level = gpio_get_level(ctx->pin);
     int64_t now = esp_timer_get_time();
@@ -92,10 +101,14 @@ static void button_timer_handler(void *arg)
     if (!is_pressed(ctx, level))
     {
         // Check if button wasn't already released and handled
-        if (xSemaphoreGive(ctx->pressed_handle) == pdTRUE)
+        if (xSemaphoreTake(ctx->pressed_handle, 0) == pdTRUE)
         {
             // Fire released event
             handle_button(ctx, now, BUTTON_EVENT_RELEASED);
+        }
+        else
+        {
+            ESP_LOGD(TAG, "failed to take on %d from timer", ctx->pin);
         }
     }
     else if (is_long_press(ctx, press_length_ms))
@@ -107,18 +120,24 @@ static void button_timer_handler(void *arg)
     else if (ctx->long_press_ms > BUTTON_DEBOUNCE_MS)
     {
         // Start timer again, that will fire long-press event, even when button is not released yet
-        esp_timer_start_once(ctx->timer, (ctx->long_press_ms - BUTTON_DEBOUNCE_MS) * 1000);
+        int64_t timeout_ms = ctx->long_press_ms - BUTTON_DEBOUNCE_MS;
+        if (esp_timer_start_once(ctx->timer, timeout_ms * 1000) == ESP_OK)
+        {
+            ESP_LOGD(TAG, "timer %d started for %lld ms", ctx->pin, timeout_ms);
+        }
     }
 #endif
 
     // Re-enable interrupts
     gpio_intr_enable(ctx->pin);
+    ESP_LOGD(TAG, "intr %d enabled", ctx->pin);
 }
 
 static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
 {
     // Dereference
     struct button_context *ctx = (struct button_context *)arg;
+    assert(ctx);
 
     // Current state
     int64_t now = esp_timer_get_time();
@@ -126,6 +145,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
 
     // No further interrupts till timer has finished
     gpio_intr_disable(ctx->pin);
+    ESP_DRAM_LOGD(TAG, "intr %d disabled", ctx->pin);
 
     // FreeRTOS semaphore handling helper
     BaseType_t task_woken = 0;
@@ -133,7 +153,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     if (is_pressed(ctx, level))
     {
         // NOTE since this is edge handler, button was just pressed
-        if (xSemaphoreTakeFromISR(ctx->pressed_handle, &task_woken) == pdTRUE)
+        if (xSemaphoreGiveFromISR(ctx->pressed_handle, &task_woken) == pdTRUE)
         {
             // Set start
             ctx->press_start = now;
@@ -141,11 +161,15 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
             // Fire pressed event
             handle_button(ctx, now, BUTTON_EVENT_PRESS);
         }
+        else
+        {
+            ESP_DRAM_LOGD(TAG, "failed to give on %d from isr", ctx->pin);
+        }
     }
     else
     {
         // NOTE since this is edge handler, button was just released
-        if (xSemaphoreGiveFromISR(ctx->pressed_handle, &task_woken) == pdTRUE)
+        if (xSemaphoreTakeFromISR(ctx->pressed_handle, &task_woken) == pdTRUE)
         {
             // Stop the timer
             esp_timer_stop(ctx->timer);
@@ -153,13 +177,20 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
             // Fire released event
             handle_button(ctx, now, BUTTON_EVENT_RELEASED);
         }
+        else
+        {
+            ESP_DRAM_LOGD(TAG, "failed to take on %d from isr", ctx->pin);
+        }
     }
 
     // Start timer that re-enables interrupts
     // NOTE this will fail if timer is already running
-    esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000);
+    if (esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000) == ESP_OK)
+    {
+        ESP_DRAM_LOGD(TAG, "timer %d started for %d ms", ctx->pin, BUTTON_DEBOUNCE_MS);
+    }
 
-    // Wake task
+    // Yield (as recommended by FreeRTOS specs)
     portYIELD_FROM_ISR(task_woken);
 }
 
@@ -212,12 +243,12 @@ esp_err_t button_config(const struct button_config *cfg, button_context *context
     ctx->long_press_ms = cfg->long_press_ms;
 #endif
     ctx->event_loop = cfg->event_loop;
-    ctx->pressed_handle = xSemaphoreCreateBinary();
 
+    ctx->pressed_handle = xSemaphoreCreateBinary();
     if (ctx->pressed_handle == NULL)
     {
         button_remove(ctx);
-        return ESP_ERR_NOT_SUPPORTED;
+        return ESP_ERR_NO_MEM;
     }
 
     // Register interrupt handler
