@@ -11,6 +11,7 @@ on:
 
 jobs:
   build:
+    # TODO matrix with all params
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

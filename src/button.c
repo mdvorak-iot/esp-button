@@ -10,11 +10,10 @@
 #define BUTTON_IRAM_ATTR
 #endif
 
-static const char TAG[] = "button";
+static const char DRAM_ATTR TAG[] = "button";
 
 ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
 
-// TODO rename to context
 struct button_context
 {
     gpio_num_t pin;
@@ -28,12 +27,12 @@ struct button_context
     volatile int64_t press_start;
 };
 
-inline static bool is_pressed(const struct button_context *ctx, int level)
+inline static bool BUTTON_IRAM_ATTR is_pressed(const struct button_context *ctx, int level)
 {
     return level == ctx->level;
 }
 
-inline static bool is_long_press(const struct button_context *ctx, int64_t press_length_ms)
+inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *ctx, int64_t press_length_ms)
 {
 #if BUTTON_LONG_PRESS_ENABLE
     return (ctx->long_press_ms > 0) && (press_length_ms >= ctx->long_press_ms);
@@ -42,7 +41,7 @@ inline static bool is_long_press(const struct button_context *ctx, int64_t press
 #endif
 }
 
-static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
+static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
 {
     if (event_loop)
     {
@@ -54,7 +53,7 @@ static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32
     }
 }
 
-static void handle_button(struct button_context *ctx, int64_t now, int32_t event_id)
+static void BUTTON_IRAM_ATTR handle_button(struct button_context *ctx, int64_t now, int32_t event_id)
 {
     // Press length
     int64_t press_length_ms = (now - ctx->press_start) / 1000L; // us to ms
@@ -70,11 +69,11 @@ static void handle_button(struct button_context *ctx, int64_t now, int32_t event
     };
 
     // Log
-    // TODO make these debug
+    const char *log_event = (event_id == BUTTON_EVENT_PRESS) ? DRAM_STR("pressed") : DRAM_STR("released");
 #if BUTTON_LONG_PRESS_ENABLE
-    ESP_DRAM_LOGI("button", "%s pin %d after %d ms (long=%d)", event_id == BUTTON_EVENT_PRESS ? "pressed" : "released", ctx->pin, data.press_length_ms, data.long_press);
+    ESP_DRAM_LOGI(TAG, "%s pin %d after %d ms (long=%d)", log_event, ctx->pin, data.press_length_ms, data.long_press);
 #else
-    ESP_DRAM_LOGI("button", "%s pin %d after %d ms", event_id == BUTTON_EVENT_PRESS ? "pressed" : "released", state->pin, data.press_length_ms);
+    ESP_DRAM_LOGI(TAG, "%s pin %d after %d ms", log_event, state->pin, data.press_length_ms);
 #endif
 
     // Queue event
@@ -246,9 +245,12 @@ esp_err_t button_remove(button_context context)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // For later use after free
+    gpio_num_t pin = context->pin;
+
     // Reset pin (ignore errors)
-    gpio_isr_handler_remove(context->pin);
-    gpio_reset_pin(context->pin);
+    gpio_isr_handler_remove(pin);
+    gpio_reset_pin(pin);
 
     // Remove internal objects
     if (context->timer)
@@ -265,5 +267,6 @@ esp_err_t button_remove(button_context context)
     free(context);
 
     // Success
+    ESP_LOGI(TAG, "reset button on pin %d", pin);
     return ESP_OK;
 }
