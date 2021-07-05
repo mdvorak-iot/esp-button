@@ -46,9 +46,11 @@ struct button_config
     esp_event_loop_handle_t event_loop;
 };
 
-esp_err_t button_config(const struct button_config *cfg);
+typedef struct button_context *button_context;
 
-esp_err_t button_remove(gpio_num_t pin);
+esp_err_t button_config(const struct button_config *cfg, button_context *context_out);
+
+esp_err_t button_remove(button_context context);
 
 #ifdef __cplusplus
 }

@@ -26,7 +26,7 @@ void app_main()
 #endif
         .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
     };
-    ESP_ERROR_CHECK(button_config(&btn_cfg));
+    ESP_ERROR_CHECK(button_config(&btn_cfg, NULL));
 
     // Setup complete
     ESP_LOGI(TAG, "started");
