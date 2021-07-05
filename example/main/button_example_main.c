@@ -20,12 +20,11 @@ void app_main()
     // Test button
     struct button_config btn_cfg = {
         .pin = EXAMPLE_BUTTON_PIN,
-        .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
         .level = EXAMPLE_BUTTON_LEVEL,
 #if CONFIG_BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = 3000,
 #endif
-        .mode = BUTTON_MODE_ON_RELEASE, // TODO in Kconfig as well, after refactor
+        .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
     };
     ESP_ERROR_CHECK(button_config(&btn_cfg));
 

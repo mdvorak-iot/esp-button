@@ -17,14 +17,13 @@ ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
 struct button_state
 {
     enum button_level level;
-    enum button_mode mode;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
     esp_event_loop_handle_t event_loop;
     esp_timer_handle_t timer;
-    volatile int64_t press_start;
     volatile bool pressed;
+    volatile int64_t press_start;
 };
 
 static struct button_state *button_states[GPIO_NUM_MAX] = {};
@@ -43,8 +42,7 @@ inline static bool is_long_press(const struct button_state *state, int64_t press
 #endif
 }
 
-static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id,
-                                       struct button_data *event_data)
+static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
 {
     if (event_loop)
     {
@@ -54,6 +52,26 @@ static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32
     {
         return esp_event_isr_post(BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
     }
+}
+
+static void on_press(gpio_num_t pin, struct button_state *state)
+{
+    // Event data
+    struct button_data data =
+    {
+        .pin = pin,
+        .press_length_ms = 0,
+#if BUTTON_LONG_PRESS_ENABLE
+        .long_press = false,
+#endif
+    };
+
+    // Log
+    // TODO make this debug
+    ESP_DRAM_LOGI("button", "pressed pin %d", pin);
+
+    // Queue event
+    button_event_isr_post(state->event_loop, BUTTON_EVENT_PRESS, &data);
 }
 
 static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
@@ -89,7 +107,7 @@ static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
 #endif
 
     // Queue event
-    button_event_isr_post(state->event_loop, BUTTON_EVENT_ACTION, &data);
+    button_event_isr_post(state->event_loop, BUTTON_EVENT_RELEASED, &data);
 
     // Reset press start, in case of rare race-condition of the timer and ISR
     state->press_start = now;
@@ -111,7 +129,7 @@ static void button_timer_handler(void *arg)
         on_release(pin, state, now);
     }
 #if BUTTON_LONG_PRESS_ENABLE
-    else if (state->mode == BUTTON_MODE_ON_PRESS && state->long_press_ms > BUTTON_DEBOUNCE_MS)
+    else if (state->long_press_ms > BUTTON_DEBOUNCE_MS)
     {
         // Start timer again, that will fire long-press event, even when button is not released yet
         esp_timer_start_once(state->timer, (state->long_press_ms - BUTTON_DEBOUNCE_MS) * 1000);
@@ -201,7 +219,6 @@ esp_err_t button_config(const struct button_config *cfg)
         }
     }
     state->level = cfg->level;
-    state->mode = cfg->mode;
 #if BUTTON_LONG_PRESS_ENABLE
     state->long_press_ms = cfg->long_press_ms;
 #endif
