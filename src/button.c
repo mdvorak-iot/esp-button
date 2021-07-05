@@ -82,7 +82,7 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, con
     };
 
     // Log
-    const char *log_event_str = (event_id == BUTTON_EVENT_PRESS) ? DRAM_STR("pressed") : DRAM_STR("released");
+    const char *log_event_str = (event_id == BUTTON_EVENT_PRESSED) ? DRAM_STR("pressed") : DRAM_STR("released");
 #if BUTTON_LONG_PRESS_ENABLE
     ESP_DRAM_LOGI(TAG, "%d %s after %d ms {long=%d}", ctx->pin, log_event_str, data.press_length_ms, data.long_press);
 #else
@@ -156,7 +156,7 @@ static void button_timer_handler(void *arg)
             if (is_long_press(ctx, press_length_ms))
             {
                 // Fire long-press event
-                handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESS);
+                handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESSED);
             }
             else if (ctx->long_press_ms > BUTTON_DEBOUNCE_MS)
             {
@@ -215,7 +215,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
         if (pressed)
         {
             // Fire pressed event
-            handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESS);
+            handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESSED);
         }
         else
         {
