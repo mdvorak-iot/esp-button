@@ -14,21 +14,24 @@ static const char TAG[] = "button";
 
 ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
 
+// TODO rename to context
 struct button_state
 {
+    gpio_num_t pin;
     enum button_level level;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
     esp_event_loop_handle_t event_loop;
     esp_timer_handle_t timer;
-    volatile bool pressed;
+    SemaphoreHandle_t pressed_handle;
     volatile int64_t press_start;
 };
 
+// TODO remove global list completely
 static struct button_state *button_states[GPIO_NUM_MAX] = {};
 
-inline static bool IRAM_ATTR is_pressed(const struct button_state *state, int level)
+inline static bool is_pressed(const struct button_state *state, int level)
 {
     return level == state->level;
 }
@@ -54,44 +57,15 @@ static esp_err_t button_event_isr_post(esp_event_loop_handle_t event_loop, int32
     }
 }
 
-static void on_press(gpio_num_t pin, struct button_state *state)
+static void handle_button(struct button_state *state, int64_t now, int32_t event_id)
 {
-    // Event data
-    struct button_data data =
-    {
-        .pin = pin,
-        .press_length_ms = 0,
-#if BUTTON_LONG_PRESS_ENABLE
-        .long_press = false,
-#endif
-    };
-
-    // Log
-    // TODO make this debug
-    ESP_DRAM_LOGI("button", "pressed pin %d", pin);
-
-    // Queue event
-    button_event_isr_post(state->event_loop, BUTTON_EVENT_PRESS, &data);
-}
-
-static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
-{
-    // Already handled
-    if (!state->pressed)
-    {
-        return;
-    }
-
     // Press length
     int64_t press_length_ms = (now - state->press_start) / 1000L; // us to ms
 
-    // Stop the timer
-    esp_timer_stop(state->timer);
-
     // Event data
     struct button_data data =
     {
-        .pin = pin,
+        .pin = state->pin,
         .press_length_ms = press_length_ms,
 #if BUTTON_LONG_PRESS_ENABLE
         .long_press = is_long_press(state, press_length_ms),
@@ -101,17 +75,13 @@ static void on_release(gpio_num_t pin, struct button_state *state, int64_t now)
     // Log
     // TODO make these debug
 #if BUTTON_LONG_PRESS_ENABLE
-    ESP_DRAM_LOGI("button", "released pin %d after %d ms (long=%d)", pin, data.press_length_ms, data.long_press);
+    ESP_DRAM_LOGI("button", "%s pin %d after %d ms (long=%d)", event_id == BUTTON_EVENT_PRESS ? "pressed" : "released", state->pin, data.press_length_ms, data.long_press);
 #else
-    ESP_DRAM_LOGI("button", "released pin %d after %d ms", pin, data.press_length_ms);
+    ESP_DRAM_LOGI("button", "%s pin %d after %d ms", event_id == BUTTON_EVENT_PRESS ? "pressed" : "released", state->pin, data.press_length_ms);
 #endif
 
     // Queue event
-    button_event_isr_post(state->event_loop, BUTTON_EVENT_RELEASED, &data);
-
-    // Reset press start, in case of rare race-condition of the timer and ISR
-    state->press_start = now;
-    state->pressed = false;
+    button_event_isr_post(state->event_loop, event_id, &data);
 }
 
 static void button_timer_handler(void *arg)
@@ -123,10 +93,19 @@ static void button_timer_handler(void *arg)
     int64_t now = esp_timer_get_time();
     int64_t press_length_ms = (now - state->press_start) / 1000L; // us to ms
 
-    if (!is_pressed(state, level) || is_long_press(state, press_length_ms))
+    if (!is_pressed(state, level))
     {
-        // Button released during debounce interval, or long-press should be reported right away
-        on_release(pin, state, now);
+        // Check if button wasn't already released and handled
+        if (xSemaphoreGive(state->pressed_handle) == pdTRUE)
+        {
+            // Fire released event
+            handle_button(state, now, BUTTON_EVENT_RELEASED);
+        }
+    }
+    else if (is_long_press(state, press_length_ms))
+    {
+        // Fire long-press event
+        handle_button(state, now, BUTTON_EVENT_PRESS);
     }
 #if BUTTON_LONG_PRESS_ENABLE
     else if (state->long_press_ms > BUTTON_DEBOUNCE_MS)
@@ -150,31 +129,43 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     int64_t now = esp_timer_get_time();
     int level = gpio_get_level(pin);
 
+    // No further interrupts till timer has finished
+    gpio_intr_disable(pin);
+
+    // FreeRTOS semaphore handling helper
+    BaseType_t task_woken = 0;
+
     if (is_pressed(state, level))
     {
         // NOTE since this is edge handler, button was just pressed
-        state->pressed = true;
-        state->press_start = now;
+        if (xSemaphoreTakeFromISR(state->pressed_handle, &task_woken) == pdTRUE)
+        {
+            // Set start
+            state->press_start = now;
 
-        // No further interrupts till timer has finished
-        gpio_intr_disable(pin);
-
-        // Start timer
-        esp_timer_start_once(state->timer, BUTTON_DEBOUNCE_MS * 1000);
+            // Fire pressed event
+            handle_button(state, now, BUTTON_EVENT_PRESS);
+        }
     }
     else
     {
         // NOTE since this is edge handler, button was just released
+        if (xSemaphoreGiveFromISR(state->pressed_handle, &task_woken) == pdTRUE)
+        {
+            // Stop the timer
+            esp_timer_stop(state->timer);
 
-        // Debounce also when releasing
-        gpio_intr_disable(pin);
-
-        // Run release logic
-        on_release(pin, state, now);
-
-        // Start timer that re-enables interrupts
-        esp_timer_start_once(state->timer, BUTTON_DEBOUNCE_MS * 1000);
+            // Fire released event
+            handle_button(state, now, BUTTON_EVENT_RELEASED);
+        }
     }
+
+    // Start timer that re-enables interrupts
+    // NOTE this will fail if timer is already running
+    esp_timer_start_once(state->timer, BUTTON_DEBOUNCE_MS * 1000);
+
+    // Wake task
+    portYIELD_FROM_ISR(task_woken);
 }
 
 esp_err_t button_config(const struct button_config *cfg)
@@ -215,19 +206,29 @@ esp_err_t button_config(const struct button_config *cfg)
         err = esp_timer_create(&timer_cfg, &state->timer);
         if (err != ESP_OK)
         {
+            // TODO button_remove
             return err;
         }
     }
+    state->pin = cfg->pin;
     state->level = cfg->level;
 #if BUTTON_LONG_PRESS_ENABLE
     state->long_press_ms = cfg->long_press_ms;
 #endif
     state->event_loop = cfg->event_loop;
+    state->pressed_handle = xSemaphoreCreateBinary();
+
+    if (state->pressed_handle == NULL)
+    {
+        // TODO button_remove
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     // Register interrupt handler
     err = gpio_isr_handler_add(cfg->pin, button_interrupt_handler, (void *)cfg->pin); // NOTE using pin value directly in the pointer, not as a pointer
     if (err != ESP_OK)
     {
+        // TODO button_remove
         return err;
     }
 
@@ -235,6 +236,7 @@ esp_err_t button_config(const struct button_config *cfg)
     return ESP_OK;
 }
 
+// TODO remove by pointer to context
 esp_err_t button_remove(gpio_num_t pin)
 {
     if (pin < 0 || !GPIO_IS_VALID_GPIO(pin))
@@ -245,8 +247,15 @@ esp_err_t button_remove(gpio_num_t pin)
     struct button_state *state = button_states[pin];
     button_states[pin] = NULL;
 
-    esp_timer_stop(state->timer);
-    esp_timer_delete(state->timer);
+    if (state->timer)
+    {
+        esp_timer_stop(state->timer);
+        esp_timer_delete(state->timer);
+    }
+    if (state->pressed_handle)
+    {
+        vSemaphoreDelete(state->pressed_handle);
+    }
 
     free(state);
 
