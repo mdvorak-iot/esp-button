@@ -28,10 +28,12 @@ enum button_level
 
 struct button_data
 {
-    gpio_num_t pin;
-    uint32_t press_length_ms;
+    // NOTE this must fit into uint32_t, as is the requirement for event post from ISR
+
+    gpio_num_t pin : 8;
+    uint32_t press_length_ms : 23; // NOTE 23 bits have range to 0-8388607 ms
 #if BUTTON_LONG_PRESS_ENABLE
-    bool long_press;
+    bool long_press : 1;
 #endif
 };
 
@@ -46,11 +48,11 @@ struct button_config
     esp_event_loop_handle_t event_loop;
 };
 
-typedef struct button_context *button_context;
+typedef struct button_context *button_context_ptr;
 
-esp_err_t button_config(const struct button_config *cfg, button_context *context_out);
+esp_err_t button_config(const struct button_config *cfg, button_context_ptr *context_out);
 
-esp_err_t button_remove(button_context context);
+esp_err_t button_remove(button_context_ptr context);
 
 #ifdef __cplusplus
 }

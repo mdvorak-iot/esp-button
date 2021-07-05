@@ -51,7 +51,9 @@ inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *c
 static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
 {
     assert(event_data);
+    _Static_assert(sizeof(struct button_data) <= sizeof(uint32_t), "sizeof(struct button_data) must fit into uint32_t, otherwise esp_event_isr_post will fail");
 
+    // TODO task unblocked??
     if (event_loop)
     {
         return esp_event_isr_post_to(event_loop, BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
@@ -65,7 +67,6 @@ static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t 
 static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, const struct button_state *state, int64_t now, int32_t event_id)
 {
     assert(ctx);
-    ESP_DRAM_LOGD(TAG, "%d handling {now=%lld, press_start=%lld, event_id=%d}", ctx->pin, now, state->press_start, event_id);
 
     // Press length
     int64_t press_length_ms = (now - state->press_start) / 1000L; // us to ms
@@ -89,7 +90,11 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, con
 #endif
 
     // Queue event
-    button_event_isr_post(ctx->event_loop, event_id, &data);
+    esp_err_t err = button_event_isr_post(ctx->event_loop, event_id, &data);
+    if (err != ESP_OK)
+    {
+        ESP_DRAM_LOGW(TAG, "event post failed: %d", err);
+    }
 }
 
 static void button_timer_handler(void *arg)
@@ -259,7 +264,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     }
 }
 
-esp_err_t button_config(const struct button_config *cfg, button_context *context_out)
+esp_err_t button_config(const struct button_config *cfg, button_context_ptr *context_out)
 {
     if (cfg == NULL || cfg->pin < 0 || !GPIO_IS_VALID_GPIO(cfg->pin))
     {
@@ -327,7 +332,7 @@ esp_err_t button_config(const struct button_config *cfg, button_context *context
     return ESP_OK;
 }
 
-esp_err_t button_remove(button_context context)
+esp_err_t button_remove(button_context_ptr context)
 {
     if (context == NULL)
     {
