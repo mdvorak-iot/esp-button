@@ -170,7 +170,7 @@ static void button_timer_handler(void *arg)
         }
         else
         {
-            ESP_DRAM_LOGD(TAG, "%d not pressed (timer)", ctx->pin);
+            ESP_LOGD(TAG, "%d not pressed (timer)", ctx->pin);
         }
     }
 #endif
