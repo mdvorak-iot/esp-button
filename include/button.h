@@ -25,11 +25,7 @@ enum button_event
 
 struct button_data
 {
-    union
-    {
-        enum button_event event;
-        int level; // NOTE this assumes button_event have same values
-    };
+    enum button_event event;
     gpio_num_t pin;
     uint32_t press_length_ms;
 #if BUTTON_LONG_PRESS_ENABLE
