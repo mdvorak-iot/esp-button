@@ -49,7 +49,7 @@ inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *c
 }
 #endif
 
-static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *ctx, const struct button_data *data)
+inline static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *ctx, const struct button_data *data)
 {
     assert(ctx);
     assert(data);
@@ -104,7 +104,7 @@ static void button_timer_handler(void *arg)
     // NOTE By enabling interrupt here, it is possible interrupt will run during timer handling
     // This will never cause an inconsistent state
     gpio_intr_enable(ctx->pin);
-    ESP_LOGD(TAG, "%d intr enabled", ctx->pin);
+    ESP_LOGV(TAG, "%d intr enabled", ctx->pin);
 
     // WARNING portEXIT_CRITICAL is always called in both if-else clauses
     portENTER_CRITICAL(&button_mux);
@@ -147,21 +147,29 @@ static void button_timer_handler(void *arg)
         struct button_state local_state = ctx->state;
         portEXIT_CRITICAL(&button_mux); // NOTE portENTER_CRITICAL before if
 
-        if (local_state.pressed)
+        if (local_state.pressed && ctx->long_press_ms > 0)
         {
-            int64_t press_length_ms = (now - ctx->state.press_start) / 1000L; // us to ms
-            if (is_long_press(ctx, press_length_ms))
+            int64_t press_length_us = (now - ctx->state.press_start); // us to ms
+            if (is_long_press(ctx, press_length_us / 1000L))
             {
                 // Fire long-press event
                 handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESSED);
             }
-            else if (ctx->long_press_ms > BUTTON_DEBOUNCE_MS)
+            else
             {
                 // Start timer again, that will fire long-press event, even when button is not released yet
-                int64_t timeout_ms = ctx->long_press_ms - BUTTON_DEBOUNCE_MS;
-                if (esp_timer_start_once(ctx->timer, timeout_ms * 1000) == ESP_OK)
+                int64_t timeout_us = ctx->long_press_ms * 1000 - press_length_us;
+
+                // Since gpio_get_level sometimes returns wrong state, poll via timer during press
+                if (timeout_us > BUTTON_DEBOUNCE_MS * 1000)
                 {
-                    ESP_LOGD(TAG, "%d timer started for %lld ms", ctx->pin, timeout_ms);
+                    timeout_us = BUTTON_DEBOUNCE_MS * 1000;
+                }
+
+                // Start the timer
+                if (timeout_us > 0 && esp_timer_start_once(ctx->timer, timeout_us) == ESP_OK)
+                {
+                    ESP_LOGV(TAG, "%d timer started for %lld ms", ctx->pin, timeout_us / 1000);
                 }
             }
         }
@@ -181,7 +189,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
 
     // No further interrupts till timer has finished
     gpio_intr_disable(ctx->pin);
-    ESP_DRAM_LOGD(TAG, "%d intr disabled", ctx->pin);
+    ESP_DRAM_LOGV(TAG, "%d intr disabled", ctx->pin);
 
     // WARNING portEXIT_CRITICAL_ISR is always called in both if-else clauses
     portENTER_CRITICAL_ISR(&button_mux);
@@ -241,7 +249,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
             // Stop the timer
             if (esp_timer_stop(ctx->timer) == ESP_OK)
             {
-                ESP_DRAM_LOGD(TAG, "%d timer stopped", ctx->pin, BUTTON_DEBOUNCE_MS);
+                ESP_DRAM_LOGV(TAG, "%d timer stopped", ctx->pin, BUTTON_DEBOUNCE_MS);
             }
 
             // Fire released event
@@ -257,7 +265,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     // NOTE this will fail if timer is already running
     if (esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000) == ESP_OK)
     {
-        ESP_DRAM_LOGD(TAG, "%d timer started for %d ms", ctx->pin, BUTTON_DEBOUNCE_MS);
+        ESP_DRAM_LOGV(TAG, "%d timer started for %d ms", ctx->pin, BUTTON_DEBOUNCE_MS);
     }
 }
 
