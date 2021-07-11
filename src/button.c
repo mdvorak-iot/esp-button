@@ -51,6 +51,9 @@ inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *c
 
 static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *ctx, const struct button_data *data)
 {
+    assert(ctx);
+    assert(data);
+
     if (data->event == BUTTON_EVENT_PRESSED)
     {
         if (ctx->on_press) ctx->on_press(ctx->arg, data);
@@ -258,9 +261,9 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     }
 }
 
-esp_err_t button_config(const struct button_config *cfg, button_context_ptr *context_out)
+esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *context_out)
 {
-    if (cfg == NULL || cfg->pin < 0 || !GPIO_IS_VALID_GPIO(cfg->pin))
+    if (cfg == NULL || pin < 0 || !GPIO_IS_VALID_GPIO(pin))
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -273,7 +276,7 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
     // Configure GPIO
     gpio_config_t gpio_cfg = {
         .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = BIT64(cfg->pin),
+        .pin_bit_mask = BIT64(pin),
         .intr_type = GPIO_INTR_ANYEDGE,
         .pull_up_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_LOW_ON_PRESS) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
         .pull_down_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_HIGH_ON_PRESS) ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
@@ -306,7 +309,7 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
         return err;
     }
 
-    ctx->pin = cfg->pin;
+    ctx->pin = pin;
     ctx->level = cfg->level;
 #if BUTTON_LONG_PRESS_ENABLE
     ctx->long_press_ms = cfg->long_press_ms;
@@ -316,7 +319,7 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
     ctx->arg = cfg->arg;
 
     // Register interrupt handler
-    err = gpio_isr_handler_add(cfg->pin, button_interrupt_handler, ctx);
+    err = gpio_isr_handler_add(pin, button_interrupt_handler, ctx);
     if (err != ESP_OK)
     {
         button_remove(ctx);
@@ -329,7 +332,7 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
         *context_out = ctx;
     }
 
-    ESP_LOGI(TAG, "configured button on pin %d", cfg->pin);
+    ESP_LOGI(TAG, "configured button on pin %d", pin);
     return ESP_OK;
 }
 

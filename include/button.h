@@ -41,7 +41,6 @@ typedef void (*button_callback_fn)(void *arg, const struct button_data *data);
 
 struct button_config
 {
-    gpio_num_t pin; // TODO move to config arg
     enum button_level level;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
@@ -54,7 +53,7 @@ struct button_config
 
 typedef struct button_context *button_context_ptr;
 
-esp_err_t button_config(const struct button_config *cfg, button_context_ptr *context_out);
+esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *context_out);
 
 esp_err_t button_remove(button_context_ptr context);
 

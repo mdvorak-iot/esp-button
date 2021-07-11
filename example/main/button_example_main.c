@@ -28,8 +28,7 @@ void app_main()
     // Test button
     struct button_config btn_cfg =
     {
-        .pin = (gpio_num_t)EXAMPLE_BUTTON_PIN,
-        .level = (enum button_level)EXAMPLE_BUTTON_LEVEL,
+        .level = EXAMPLE_BUTTON_LEVEL,
 #if CONFIG_BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = EXAMPLE_BUTTON_LONG_PRESS_MS,
 #endif
@@ -38,7 +37,7 @@ void app_main()
         .on_release = button_handler,
         .arg = test,
     };
-    ESP_ERROR_CHECK(button_config(&btn_cfg, NULL));
+    ESP_ERROR_CHECK(button_config(EXAMPLE_BUTTON_PIN, &btn_cfg, NULL));
 
     // Setup complete
     ESP_LOGI(TAG, "started");

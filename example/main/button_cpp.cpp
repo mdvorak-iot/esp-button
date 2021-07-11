@@ -10,7 +10,6 @@ static void button_handler(__unused void *arg, __unused const struct button_data
 extern "C" void test_cpp()
 {
     struct button_config cfg = {
-        .pin = (gpio_num_t)EXAMPLE_BUTTON_PIN,
         .level = BUTTON_LEVEL_LOW_ON_PRESS,
         .long_press_ms = 0,
         .internal_pull = false,
@@ -19,7 +18,7 @@ extern "C" void test_cpp()
         .arg = nullptr,
     };
     button_context_ptr ctx = nullptr;
-    ESP_ERROR_CHECK(button_config(&cfg, &ctx));
+    ESP_ERROR_CHECK(button_config((gpio_num_t)EXAMPLE_BUTTON_PIN, &cfg, &ctx));
     assert(ctx);
 
     ESP_ERROR_CHECK(button_remove(ctx));
