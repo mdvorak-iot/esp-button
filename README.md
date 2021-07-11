@@ -4,6 +4,8 @@
 
 Button handler, with software debounce logic and long-press support.
 
+Internally, it is using interrupts and esp_timer for debounce. Does not poll state when idle.
+
 ## Usage
 
 To reference this library by your project, add it as git submodule, using command
