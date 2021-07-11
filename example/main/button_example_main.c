@@ -1,34 +1,29 @@
 #include "button.h"
+#include "example_config.h"
 #include <driver/gpio.h>
-#include <esp_event.h>
 #include <esp_log.h>
 
 static const char TAG[] = "example";
+static void *test = NULL;
 
-#define EXAMPLE_BUTTON_PIN CONFIG_EXAMPLE_BUTTON_PIN
-#define EXAMPLE_BUTTON_LEVEL CONFIG_EXAMPLE_BUTTON_LEVEL
-#if CONFIG_EXAMPLE_BUTTON_INTERNAL_PULL
-#define EXAMPLE_BUTTON_INTERNAL_PULL 1
-#else
-#define EXAMPLE_BUTTON_INTERNAL_PULL 0
-#endif
-#define EXAMPLE_BUTTON_LONG_PRESS_MS CONFIG_EXAMPLE_BUTTON_LONG_PRESS_MS
+void test_cpp();
 
-static void button_event_handler(__unused void *arg, __unused esp_event_base_t event_base,
-                                 int32_t event_id, void *event_data)
+static void button_handler(void *arg, const struct button_data *data)
 {
-    struct button_data *data = (struct button_data *)event_data;
-    ESP_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d}", data->pin, event_id, data->long_press, data->press_length_ms);
+    assert(arg == test);
+    ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d, level=%d}", data->pin, data->event, data->long_press, data->press_length_ms, data->level);
 }
 
 void app_main()
 {
     // Generic init
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
 
-    // Events
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(BUTTON_EVENT, ESP_EVENT_ANY_ID, button_event_handler, NULL, NULL));
+    // CPP test
+    test_cpp();
+
+    // Just for assertion, as a primitive test
+    test = malloc(1);
 
     // Test button
     struct button_config btn_cfg =
@@ -39,7 +34,9 @@ void app_main()
         .long_press_ms = EXAMPLE_BUTTON_LONG_PRESS_MS,
 #endif
         .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
-        .event_loop = NULL,
+        .on_press = button_handler,
+        .on_release = button_handler,
+        .arg = test,
     };
     ESP_ERROR_CHECK(button_config(&btn_cfg, NULL));
 

@@ -1,7 +1,8 @@
 #include "button.h"
 #include <driver/gpio.h>
-#include <esp_event.h>
 #include <esp_log.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
 #include <memory.h>
 
 #if CONFIG_BUTTON_ISR_IN_IRAM
@@ -9,8 +10,6 @@
 #else
 #define BUTTON_IRAM_ATTR
 #endif
-
-ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);
 
 static const char DRAM_ATTR TAG[] = "button";
 
@@ -29,7 +28,9 @@ struct button_context
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
-    esp_event_loop_handle_t event_loop;
+    button_callback_fn on_press;
+    button_callback_fn on_release;
+    void *arg;
     esp_timer_handle_t timer;
     volatile struct button_state state;
 };
@@ -48,23 +49,19 @@ inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *c
 }
 #endif
 
-static esp_err_t BUTTON_IRAM_ATTR button_event_isr_post(esp_event_loop_handle_t event_loop, int32_t event_id, struct button_data *event_data)
+static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *ctx, const struct button_data *data)
 {
-    assert(event_data);
-    _Static_assert(sizeof(struct button_data) <= sizeof(uint32_t), "sizeof(struct button_data) must fit into uint32_t, otherwise esp_event_isr_post will fail");
-
-    // TODO task unblocked??
-    if (event_loop)
+    if (data->event == BUTTON_EVENT_PRESSED)
     {
-        return esp_event_isr_post_to(event_loop, BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
+        if (ctx->on_press) ctx->on_press(ctx->arg, data);
     }
-    else
+    else if (data->event == BUTTON_EVENT_RELEASED)
     {
-        return esp_event_isr_post(BUTTON_EVENT, event_id, event_data, sizeof(*event_data), NULL);
+        if (ctx->on_release) ctx->on_release(ctx->arg, data);
     }
 }
 
-static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, const struct button_state *state, int64_t now, int32_t event_id)
+static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, const struct button_state *state, int64_t now, enum button_event event)
 {
     assert(ctx);
 
@@ -74,6 +71,7 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, con
     // Event data
     struct button_data data =
     {
+        .event = event,
         .pin = ctx->pin,
         .press_length_ms = press_length_ms,
 #if BUTTON_LONG_PRESS_ENABLE
@@ -82,19 +80,15 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, con
     };
 
     // Log
-    const char *log_event_str = (event_id == BUTTON_EVENT_PRESSED) ? DRAM_STR("pressed") : DRAM_STR("released");
+    const char *log_event_str = (event == BUTTON_EVENT_PRESSED) ? DRAM_STR("pressed") : DRAM_STR("released");
 #if BUTTON_LONG_PRESS_ENABLE
     ESP_DRAM_LOGI(TAG, "%d %s after %d ms {long=%d}", ctx->pin, log_event_str, data.press_length_ms, data.long_press);
 #else
     ESP_DRAM_LOGI(TAG, "%d %s after %d ms", state->pin, log_event_str, data.press_length_ms);
 #endif
 
-    // Queue event
-    esp_err_t err = button_event_isr_post(ctx->event_loop, event_id, &data);
-    if (err != ESP_OK)
-    {
-        ESP_DRAM_LOGW(TAG, "event post failed: %d", err);
-    }
+    // Callback
+    fire_callback(ctx, &data);
 }
 
 static void button_timer_handler(void *arg)
@@ -270,6 +264,11 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
     {
         return ESP_ERR_INVALID_ARG;
     }
+    if (!cfg->on_press && !cfg->on_release)
+    {
+        // At least one callback must be specified, otherwise it doesn't make sense
+        return ESP_ERR_INVALID_ARG;
+    }
 
     // Configure GPIO
     gpio_config_t gpio_cfg = {
@@ -312,7 +311,9 @@ esp_err_t button_config(const struct button_config *cfg, button_context_ptr *con
 #if BUTTON_LONG_PRESS_ENABLE
     ctx->long_press_ms = cfg->long_press_ms;
 #endif
-    ctx->event_loop = cfg->event_loop;
+    ctx->on_press = cfg->on_press;
+    ctx->on_release = cfg->on_release;
+    ctx->arg = cfg->arg;
 
     // Register interrupt handler
     err = gpio_isr_handler_add(cfg->pin, button_interrupt_handler, ctx);

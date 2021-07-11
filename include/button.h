@@ -1,7 +1,6 @@
 #pragma once
 
 #include <esp_err.h>
-#include <esp_event_base.h>
 #include <hal/gpio_types.h>
 #include <stdbool.h>
 
@@ -12,40 +11,45 @@ extern "C" {
 #define BUTTON_DEBOUNCE_MS CONFIG_BUTTON_DEBOUNCE_MS
 #define BUTTON_LONG_PRESS_ENABLE CONFIG_BUTTON_LONG_PRESS_ENABLE
 
-ESP_EVENT_DECLARE_BASE(BUTTON_EVENT);
-
-enum button_event
-{
-    BUTTON_EVENT_PRESSED,
-    BUTTON_EVENT_RELEASED,
-};
-
 enum button_level
 {
     BUTTON_LEVEL_LOW_ON_PRESS = 0,
     BUTTON_LEVEL_HIGH_ON_PRESS = 1,
 };
 
+enum button_event
+{
+    BUTTON_EVENT_RELEASED = 0,
+    BUTTON_EVENT_PRESSED = 1,
+};
+
 struct button_data
 {
-    // NOTE this must fit into uint32_t, as is the requirement for event post from ISR
-
-    gpio_num_t pin : 8;
-    uint32_t press_length_ms : 23; // NOTE 23 bits have range to 0-8388607 ms
+    union
+    {
+        enum button_event event;
+        int level; // NOTE this assumes button_event have same values
+    };
+    gpio_num_t pin;
+    uint32_t press_length_ms;
 #if BUTTON_LONG_PRESS_ENABLE
-    bool long_press : 1;
+    bool long_press;
 #endif
 };
 
+typedef void (*button_callback_fn)(void *arg, const struct button_data *data);
+
 struct button_config
 {
-    gpio_num_t pin;
+    gpio_num_t pin; // TODO move to config arg
     enum button_level level;
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
     bool internal_pull;
-    esp_event_loop_handle_t event_loop;
+    button_callback_fn on_press;
+    button_callback_fn on_release;
+    void *arg;
 };
 
 typedef struct button_context *button_context_ptr;
