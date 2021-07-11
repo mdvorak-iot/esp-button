@@ -11,7 +11,7 @@ void test_cpp();
 static void button_handler(void *arg, const struct button_data *data)
 {
     assert(arg == test);
-    ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d, level=%d}", data->pin, data->event, data->long_press, data->press_length_ms, data->level);
+    ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d}", data->pin, data->event, data->long_press, data->press_length_ms);
 }
 
 void app_main()
