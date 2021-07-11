@@ -275,11 +275,11 @@ esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_
 
     // Configure GPIO
     gpio_config_t gpio_cfg = {
-        .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = BIT64(pin),
-        .intr_type = GPIO_INTR_ANYEDGE,
+        .mode = GPIO_MODE_INPUT,
         .pull_up_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_LOW_ON_PRESS) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
         .pull_down_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_HIGH_ON_PRESS) ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_ANYEDGE,
     };
 
     esp_err_t err = gpio_config(&gpio_cfg);
