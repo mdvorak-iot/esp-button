@@ -16,6 +16,14 @@ static void button_handler(void *arg, const struct button_data *data)
 
 void app_main()
 {
+    // NOTE these don't affect log output via ESP_DRAM_LOG*
+    esp_log_level_set("memory_layout", ESP_LOG_INFO);
+    esp_log_level_set("heap_init", ESP_LOG_INFO);
+    esp_log_level_set("memspi", ESP_LOG_INFO);
+    esp_log_level_set("spi_flash", ESP_LOG_INFO);
+    esp_log_level_set("cpu_start", ESP_LOG_INFO);
+    esp_log_level_set("intr_alloc", ESP_LOG_DEBUG);
+
     // Generic init
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
 

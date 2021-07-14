@@ -18,6 +18,9 @@ static portMUX_TYPE button_mux = portMUX_INITIALIZER_UNLOCKED;
 struct button_state
 {
     bool pressed;
+#if BUTTON_LONG_PRESS_ENABLE
+    bool long_press;
+#endif
     int64_t press_start;
 };
 
@@ -41,14 +44,6 @@ inline static bool BUTTON_IRAM_ATTR is_pressed(const struct button_context *ctx,
     return level == ctx->level;
 }
 
-#if BUTTON_LONG_PRESS_ENABLE
-inline static bool BUTTON_IRAM_ATTR is_long_press(const struct button_context *ctx, int64_t press_length_ms)
-{
-    assert(ctx);
-    return (ctx->long_press_ms > 0) && (press_length_ms >= ctx->long_press_ms);
-}
-#endif
-
 inline static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *ctx, const struct button_data *data)
 {
     assert(ctx);
@@ -64,12 +59,9 @@ inline static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *c
     }
 }
 
-static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, const struct button_state *state, int64_t now, enum button_event event)
+static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enum button_event event, int64_t press_length_ms, bool long_press)
 {
     assert(ctx);
-
-    // Press length
-    int64_t press_length_ms = (now - state->press_start) / 1000L; // us to ms
 
     // Event data
     struct button_data data =
@@ -78,7 +70,7 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, con
         .pin = ctx->pin,
         .press_length_ms = press_length_ms,
 #if BUTTON_LONG_PRESS_ENABLE
-        .long_press = is_long_press(ctx, press_length_ms),
+        .long_press = long_press,
 #endif
     };
 
@@ -100,83 +92,82 @@ static void button_timer_handler(void *arg)
     struct button_context *ctx = (struct button_context *)arg;
     assert(ctx);
 
-    // Re-enable interrupt
-    // NOTE By enabling interrupt here, it is possible interrupt will run during timer handling
-    // This will never cause an inconsistent state
-    gpio_intr_enable(ctx->pin);
-    ESP_LOGV(TAG, "%d intr enabled", ctx->pin);
-
-    // WARNING portEXIT_CRITICAL is always called in both if-else clauses
-    portENTER_CRITICAL(&button_mux);
-
     // Get current state
     int64_t now = esp_timer_get_time();
     int level = gpio_get_level(ctx->pin);
 
-    // Handle
+    // Handle state change
+    portENTER_CRITICAL(&button_mux);
+
+    // Handle release debounce or misfire
+    if (!ctx->state.pressed)
+    {
+        // Exit critical section
+        portEXIT_CRITICAL(&button_mux);
+        // Stop timer
+        esp_timer_stop(ctx->timer);
+        // Re-enable interrupt
+        gpio_intr_enable(ctx->pin);
+        ESP_LOGV(TAG, "%d intr enabled", ctx->pin);
+        // Done (already exited from CS)
+        return;
+    }
+
+    bool released = false;
+    int64_t press_length_ms = (now - ctx->state.press_start) / 1000; // us to ms
+
+#if BUTTON_LONG_PRESS_ENABLE
+    // Is it long press?
+    bool fire_long_press = false;
+    if (!ctx->state.long_press && ctx->long_press_ms > 0)
+    {
+        ctx->state.long_press = fire_long_press = (press_length_ms >= ctx->long_press_ms);
+    }
+
+    // Store long_press state for use outside CS
+    bool state_long_press = ctx->state.long_press;
+#else
+    bool state_long_press = false;
+#endif
+
+    // Released?
     if (!is_pressed(ctx, level))
     {
-        bool released = false;
-        struct button_state local_state;
+        ctx->state.pressed = false;
+#if BUTTON_LONG_PRESS_ENABLE
+        ctx->state.long_press = false;
+#endif
+        released = true;
+    }
 
-        if (ctx->state.pressed)
+    // Exit CS for actual processing
+    portEXIT_CRITICAL(&button_mux);
+
+    // Handle
+    if (released)
+    {
+        // Stop timer
+        esp_timer_stop(ctx->timer);
+
+        // Fire released event
+        handle_button(ctx, BUTTON_EVENT_RELEASED, press_length_ms, state_long_press);
+
+        // Start timer once - it will re-enable interrupt
+        esp_err_t err = esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000);
+        if (err == ESP_OK)
         {
-            ctx->state.pressed = false;
-
-            // Copy state and handle
-            local_state = ctx->state;
-            released = true;
-        }
-        portEXIT_CRITICAL(&button_mux); // NOTE portENTER_CRITICAL before if
-
-        // Check if button wasn't already released and handled
-        if (released)
-        {
-            // Fire released event
-            handle_button(ctx, &local_state, now, BUTTON_EVENT_RELEASED);
+            ESP_DRAM_LOGV(TAG, "%d timer started for %d ms (timer)", ctx->pin, BUTTON_DEBOUNCE_MS);
         }
         else
         {
-            ESP_LOGD(TAG, "%d already released (timer)", ctx->pin);
+            ESP_DRAM_LOGV(TAG, "%d timer failed to start: %d (timer)", err);
         }
     }
 #if BUTTON_LONG_PRESS_ENABLE
-    else
+    else if (fire_long_press)
     {
-        // Copy state safely
-        struct button_state local_state = ctx->state;
-        portEXIT_CRITICAL(&button_mux); // NOTE portENTER_CRITICAL before if
-
-        if (local_state.pressed && ctx->long_press_ms > 0)
-        {
-            int64_t press_length_us = (now - ctx->state.press_start); // us to ms
-            if (is_long_press(ctx, press_length_us / 1000L))
-            {
-                // Fire long-press event
-                handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESSED);
-            }
-            else
-            {
-                // Start timer again, that will fire long-press event, even when button is not released yet
-                int64_t timeout_us = ctx->long_press_ms * 1000 - press_length_us;
-
-                // Since gpio_get_level sometimes returns wrong state, poll via timer during press
-                if (timeout_us > BUTTON_DEBOUNCE_MS * 1000)
-                {
-                    timeout_us = BUTTON_DEBOUNCE_MS * 1000;
-                }
-
-                // Start the timer
-                if (timeout_us > 0 && esp_timer_start_once(ctx->timer, timeout_us) == ESP_OK)
-                {
-                    ESP_LOGV(TAG, "%d timer started for %lld ms", ctx->pin, timeout_us / 1000);
-                }
-            }
-        }
-        else
-        {
-            ESP_LOGD(TAG, "%d not pressed (timer)", ctx->pin);
-        }
+        // Fire long-press event
+        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, true);
     }
 #endif
 }
@@ -191,81 +182,46 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     gpio_intr_disable(ctx->pin);
     ESP_DRAM_LOGV(TAG, "%d intr disabled", ctx->pin);
 
-    // WARNING portEXIT_CRITICAL_ISR is always called in both if-else clauses
+    int64_t now = esp_timer_get_time();
+
+    // Sync
     portENTER_CRITICAL_ISR(&button_mux);
 
-    // Current state
-    int64_t now = esp_timer_get_time();
-    int level = gpio_get_level(ctx->pin);
+    // Button was just pressed
+    bool pressed = false;
 
-    if (is_pressed(ctx, level))
+    if (!ctx->state.pressed)
     {
-        // NOTE since this is edge handler, button was just pressed
-        bool pressed = false;
-        struct button_state local_state;
+        // Set start
+        ctx->state.press_start = now;
+        ctx->state.pressed = true;
+        ctx->state.long_press = false;
 
-        if (!ctx->state.pressed)
+        // Set flag
+        pressed = true;
+    }
+    portEXIT_CRITICAL_ISR(&button_mux);
+
+    // Handle outside mutex
+    if (pressed)
+    {
+        // Fire pressed event
+        handle_button(ctx, BUTTON_EVENT_PRESSED, 0, false);
+
+        // Start timer polling timer
+        esp_err_t err = esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000);
+        if (err == ESP_OK)
         {
-            // Set start
-            ctx->state.press_start = now;
-            ctx->state.pressed = true;
-
-            // Copy state and handle
-            local_state = ctx->state;
-            pressed = true;
-        }
-        portEXIT_CRITICAL_ISR(&button_mux); // NOTE portENTER_CRITICAL_ISR before if
-
-        // Handle outside mutex
-        if (pressed)
-        {
-            // Fire pressed event
-            handle_button(ctx, &local_state, now, BUTTON_EVENT_PRESSED);
+            ESP_DRAM_LOGV(TAG, "%d timer started for %d ms (intr)", ctx->pin, BUTTON_DEBOUNCE_MS);
         }
         else
         {
-            ESP_DRAM_LOGD(TAG, "%d already pressed (isr)", ctx->pin);
+            ESP_DRAM_LOGV(TAG, "%d timer failed to start: %d (isr)", err);
         }
     }
     else
     {
-        // NOTE since this is edge handler, button was just released
-        bool released = false;
-        struct button_state local_state;
-
-        if (ctx->state.pressed)
-        {
-            ctx->state.pressed = false;
-
-            // Copy state and handle
-            local_state = ctx->state;
-            released = true;
-        }
-        portEXIT_CRITICAL_ISR(&button_mux); // NOTE portENTER_CRITICAL_ISR before if
-
-        // Handle outside mutex
-        if (released)
-        {
-            // Stop the timer
-            if (esp_timer_stop(ctx->timer) == ESP_OK)
-            {
-                ESP_DRAM_LOGV(TAG, "%d timer stopped", ctx->pin, BUTTON_DEBOUNCE_MS);
-            }
-
-            // Fire released event
-            handle_button(ctx, &local_state, now, BUTTON_EVENT_RELEASED);
-        }
-        else
-        {
-            ESP_DRAM_LOGD(TAG, "%d already released (isr)", ctx->pin);
-        }
-    }
-
-    // Start timer that re-enables interrupts
-    // NOTE this will fail if timer is already running
-    if (esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000) == ESP_OK)
-    {
-        ESP_DRAM_LOGV(TAG, "%d timer started for %d ms", ctx->pin, BUTTON_DEBOUNCE_MS);
+        ESP_DRAM_LOGD(TAG, "%d already pressed (isr)", ctx->pin);
     }
 }
 
@@ -287,7 +243,7 @@ esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_LOW_ON_PRESS) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
         .pull_down_en = (cfg->internal_pull && cfg->level == BUTTON_LEVEL_HIGH_ON_PRESS) ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE,
+        .intr_type = (cfg->level == BUTTON_LEVEL_LOW_ON_PRESS) ? GPIO_INTR_NEGEDGE : GPIO_INTR_POSEDGE,
     };
 
     esp_err_t err = gpio_config(&gpio_cfg);
