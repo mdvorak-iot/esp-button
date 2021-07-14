@@ -5,7 +5,8 @@
 Button handler, with software debounce logic and long-press support.
 
 Internally, it is using interrupts and esp_timer for debounce. Does not poll state when idle, 
-only while button is pressed (this is necessary due to interrupt handing routine).
+only while button is being pressed (this is necessary, as it is impossible to disambiguate 
+press and release in an interrupt routine).
 
 ## Usage
 
