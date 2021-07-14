@@ -49,9 +49,15 @@ struct button_config
 
 typedef struct button_context *button_context_ptr;
 
-esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *context_out);
+esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *ctx_out);
 
-esp_err_t button_remove(button_context_ptr context);
+esp_err_t button_remove(button_context_ptr ctx);
+
+esp_err_t button_suspend(button_context_ptr ctx);
+
+esp_err_t button_suspend_for(button_context_ptr ctx, int32_t timeout_ms);
+
+esp_err_t button_resume(button_context_ptr ctx);
 
 #ifdef __cplusplus
 }

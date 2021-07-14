@@ -114,7 +114,7 @@ static void button_timer_handler(void *arg)
     }
 
     bool released = false;
-    int64_t press_length_ms = (now - ctx->state.press_start) / 1000; // us to ms
+    int64_t press_length_ms = (now - ctx->state.press_start) / 1000LL; // us to ms
 
 #if BUTTON_LONG_PRESS_ENABLE
     // Is it long press?
@@ -153,7 +153,7 @@ static void button_timer_handler(void *arg)
         handle_button(ctx, BUTTON_EVENT_RELEASED, press_length_ms, state_long_press);
 
         // Start timer once - it will re-enable interrupt
-        esp_err_t err = esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000);
+        esp_err_t err = esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
         if (err == ESP_OK)
         {
             ESP_DRAM_LOGV(TAG, "%d timer started for %d ms (timer)", ctx->pin, BUTTON_DEBOUNCE_MS);
@@ -162,6 +162,9 @@ static void button_timer_handler(void *arg)
         {
             ESP_DRAM_LOGV(TAG, "%d timer failed to start: %d (timer)", err);
         }
+
+        // Done
+        return;
     }
 #if BUTTON_LONG_PRESS_ENABLE
     else if (fire_long_press)
@@ -170,6 +173,9 @@ static void button_timer_handler(void *arg)
         handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, true);
     }
 #endif
+
+    // Make sure timer is running - this is needed for manual suspend support
+    esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
 }
 
 static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
@@ -209,7 +215,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
         handle_button(ctx, BUTTON_EVENT_PRESSED, 0, false);
 
         // Start timer polling timer
-        esp_err_t err = esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000);
+        esp_err_t err = esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
         if (err == ESP_OK)
         {
             ESP_DRAM_LOGV(TAG, "%d timer started for %d ms (intr)", ctx->pin, BUTTON_DEBOUNCE_MS);
@@ -225,7 +231,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     }
 }
 
-esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *context_out)
+esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_context_ptr *ctx_out)
 {
     if (cfg == NULL || pin < 0 || !GPIO_IS_VALID_GPIO(pin))
     {
@@ -291,40 +297,88 @@ esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_
     }
 
     // Pass out context pointer
-    if (context_out != NULL)
+    if (ctx_out != NULL)
     {
-        *context_out = ctx;
+        *ctx_out = ctx;
     }
 
     ESP_LOGI(TAG, "configured button on pin %d", pin);
     return ESP_OK;
 }
 
-esp_err_t button_remove(button_context_ptr context)
+esp_err_t button_remove(button_context_ptr ctx)
 {
-    if (context == NULL)
+    if (ctx == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     // For later use after free
-    gpio_num_t pin = context->pin;
+    gpio_num_t pin = ctx->pin;
 
     // Reset pin (ignore errors)
     gpio_isr_handler_remove(pin);
     gpio_reset_pin(pin);
 
     // Remove internal objects
-    if (context->timer)
+    if (ctx->timer)
     {
-        esp_timer_stop(context->timer);
-        esp_timer_delete(context->timer);
+        esp_timer_stop(ctx->timer);
+        esp_timer_delete(ctx->timer);
     }
 
     // Free memory
-    free(context);
+    free(ctx);
 
     // Success
     ESP_LOGI(TAG, "reset button on pin %d", pin);
     return ESP_OK;
+}
+
+inline esp_err_t button_suspend(button_context_ptr ctx)
+{
+    return button_suspend_for(ctx, -1);
+}
+
+esp_err_t button_suspend_for(button_context_ptr ctx, int32_t timeout_ms)
+{
+    if (ctx == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // No further interrupts till timer has finished
+    gpio_intr_disable(ctx->pin);
+    ESP_DRAM_LOGV(TAG, "%d intr disabled", ctx->pin);
+
+    // Stop timer and start it again
+    // NOTE these two calls have possible race-condition with timer and ISR
+    esp_timer_stop(ctx->timer);
+
+    if (timeout_ms >= 0)
+    {
+        // This will eventually re-enable interrupt, and also fire any pending events
+        // NOTE if this fails, suspend have failed due to race-condition
+        return esp_timer_start_once(ctx->timer, timeout_ms * 1000ULL);
+    }
+    else
+    {
+        // Disabled
+        return ESP_OK;
+    }
+}
+
+esp_err_t button_resume(button_context_ptr ctx)
+{
+    if (ctx == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Stop timer and start it again
+    // NOTE these two calls have possible race-condition with timer and ISR
+    esp_timer_stop(ctx->timer);
+
+    // Start normal timer - it will get stopped in timer handler, if needed
+    return esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
 }
