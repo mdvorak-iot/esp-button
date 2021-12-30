@@ -14,7 +14,13 @@ void test_cpp();
 static void button_handler(void *arg, const struct button_data *data)
 {
     assert(arg == test);
-    ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d}", data->pin, data->event, data->long_press, data->press_length_ms);
+
+#if BUTTON_LONG_PRESS_ENABLE
+    bool long_press = data->long_press;
+#else
+    bool long_press = false;
+#endif
+    ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d}", data->pin, data->event, long_press, data->press_length_ms);
 }
 
 _Noreturn void app_main()

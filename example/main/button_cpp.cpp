@@ -9,10 +9,13 @@ static void button_handler(__unused void *arg, __unused const struct button_data
 
 extern "C" void test_cpp()
 {
-    struct button_config cfg = {
+    struct button_config cfg =
+    {
         .level = BUTTON_LEVEL_LOW_ON_PRESS,
         .internal_pull = false,
+#if BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = 0,
+#endif
         .continuous_callback = false,
         .on_press = nullptr,
         .on_release = button_handler,
