@@ -2,6 +2,9 @@
 #include "example_config.h"
 #include <driver/gpio.h>
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <sys/cdefs.h>
 
 static const char TAG[] = "example";
 static void *test = NULL;
@@ -14,7 +17,7 @@ static void button_handler(void *arg, const struct button_data *data)
     ESP_DRAM_LOGI(TAG, "button %d event %d {long_press=%d, press_length_ms=%d}", data->pin, data->event, data->long_press, data->press_length_ms);
 }
 
-void app_main()
+_Noreturn void app_main()
 {
     // NOTE these don't affect log output via ESP_DRAM_LOG*
     esp_log_level_set("memory_layout", ESP_LOG_INFO);
@@ -50,4 +53,6 @@ void app_main()
 
     // Setup complete
     ESP_LOGI(TAG, "started");
+
+    while (true) vTaskDelay(1);
 }
