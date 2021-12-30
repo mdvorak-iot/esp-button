@@ -79,7 +79,7 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enu
 #if BUTTON_LONG_PRESS_ENABLE
     ESP_DRAM_LOGI(TAG, "%d %s after %d ms {long=%d}", ctx->pin, log_event_str, data.press_length_ms, data.long_press);
 #else
-    ESP_DRAM_LOGI(TAG, "%d %s after %d ms", state->pin, log_event_str, data.press_length_ms);
+    ESP_DRAM_LOGI(TAG, "%d %s after %d ms", ctx->pin, log_event_str, data.press_length_ms);
 #endif
 
     // Callback
