@@ -60,7 +60,7 @@ inline static void BUTTON_IRAM_ATTR fire_callback(const struct button_context *c
     }
 }
 
-static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enum button_event event, int64_t press_length_ms, bool long_press)
+static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enum button_event event, int64_t press_length_ms, bool long_press, bool silent)
 {
     assert(ctx);
 
@@ -76,12 +76,15 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enu
     };
 
     // Log
-    const char *log_event_str = (event == BUTTON_EVENT_PRESSED) ? DRAM_STR("pressed") : DRAM_STR("released");
+    if (!silent)
+    {
+        const char *log_event_str = (event == BUTTON_EVENT_PRESSED) ? DRAM_STR("pressed") : DRAM_STR("released");
 #if BUTTON_LONG_PRESS_ENABLE
-    ESP_DRAM_LOGI(TAG, "%d %s after %d ms {long=%d}", ctx->pin, log_event_str, data.press_length_ms, data.long_press);
+        ESP_DRAM_LOGI(TAG, "%d %s after %d ms {long=%d}", ctx->pin, log_event_str, data.press_length_ms, data.long_press);
 #else
-    ESP_DRAM_LOGI(TAG, "%d %s after %d ms", ctx->pin, log_event_str, data.press_length_ms);
+        ESP_DRAM_LOGI(TAG, "%d %s after %d ms", ctx->pin, log_event_str, data.press_length_ms);
 #endif
+    }
 
     // Callback
     fire_callback(ctx, &data);
@@ -152,7 +155,7 @@ static void button_timer_handler(void *arg)
         esp_timer_stop(ctx->timer);
 
         // Fire released event
-        handle_button(ctx, BUTTON_EVENT_RELEASED, press_length_ms, state_long_press);
+        handle_button(ctx, BUTTON_EVENT_RELEASED, press_length_ms, state_long_press, false);
 
         // Start timer once - it will re-enable interrupt
         esp_err_t err = esp_timer_start_once(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
@@ -172,13 +175,13 @@ static void button_timer_handler(void *arg)
     else if (fire_long_press || ctx->continuous_callback)
     {
         // Fire long-press event
-        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, fire_long_press);
+        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, ctx->state.long_press, !fire_long_press);
     }
 #else
     else if (ctx->continuous_callback)
     {
         // Still pressed, fire callback
-        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, false);
+        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, false, true);
     }
 #endif
 
@@ -222,7 +225,7 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
     if (pressed)
     {
         // Fire pressed event
-        handle_button(ctx, BUTTON_EVENT_PRESSED, 0, false);
+        handle_button(ctx, BUTTON_EVENT_PRESSED, 0, false, false);
 
         // Start timer polling timer
         esp_err_t err = esp_timer_start_periodic(ctx->timer, BUTTON_DEBOUNCE_MS * 1000ULL);
