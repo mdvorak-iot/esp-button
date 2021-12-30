@@ -96,6 +96,14 @@ struct button_config
      * @brief Logic level of the pressed button.
      */
     enum button_level level;
+    /**
+     * @brief Enable internal button pull-up or pull-down resistor.
+     *
+     * When set true, its function depends on level config.
+     * For BUTTON_LEVEL_LOW_ON_PRESS it will enable pull-up,
+     * for BUTTON_LEVEL_HIGH_ON_PRESS it will enable pull-down.
+     */
+    bool internal_pull;
 #if BUTTON_LONG_PRESS_ENABLE
     /**
      * @brief Long-press interval. Set to 0 to disable for this button.
@@ -105,14 +113,6 @@ struct button_config
      */
     uint32_t long_press_ms;
 #endif
-    /**
-     * @brief Enable internal button pull-up or pull-down resistor.
-     *
-     * When set true, its function depends on level config.
-     * For BUTTON_LEVEL_LOW_ON_PRESS it will enable pull-up,
-     * for BUTTON_LEVEL_HIGH_ON_PRESS it will enable pull-down.
-     */
-    bool internal_pull;
     /**
      * @brief Button pressed callback. This is should be called once
      * after button is pressed, and possibly again for long-press.
