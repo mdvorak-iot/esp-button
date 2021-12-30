@@ -18,4 +18,8 @@ menu "Example config"
     config EXAMPLE_BUTTON_LONG_PRESS_MS
         int "Test button long-press interval"
         default 3000
+
+    config EXAMPLE_BUTTON_CONTINUOUS_CALLBACK
+        bool "Test button fire press events continuously"
+        default n
 endmenu

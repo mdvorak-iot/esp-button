@@ -11,8 +11,9 @@ extern "C" void test_cpp()
 {
     struct button_config cfg = {
         .level = BUTTON_LEVEL_LOW_ON_PRESS,
-        .long_press_ms = 0,
         .internal_pull = false,
+        .long_press_ms = 0,
+        .continuous_callback = false,
         .on_press = nullptr,
         .on_release = button_handler,
         .arg = nullptr,

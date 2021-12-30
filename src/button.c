@@ -31,6 +31,7 @@ struct button_context
 #if BUTTON_LONG_PRESS_ENABLE
     uint32_t long_press_ms;
 #endif
+    bool continuous_callback;
     button_callback_fn on_press;
     button_callback_fn on_release;
     void *arg;
@@ -168,10 +169,16 @@ static void button_timer_handler(void *arg)
         return;
     }
 #if BUTTON_LONG_PRESS_ENABLE
-    else if (fire_long_press)
+    else if (fire_long_press || ctx->continuous_callback)
     {
         // Fire long-press event
-        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, true);
+        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, fire_long_press);
+    }
+#else
+    else if (ctx->continuous_callback)
+    {
+        // Still pressed, fire callback
+        handle_button(ctx, BUTTON_EVENT_PRESSED, press_length_ms, false);
     }
 #endif
 
@@ -202,7 +209,9 @@ static void BUTTON_IRAM_ATTR button_interrupt_handler(void *arg)
         // Set start
         ctx->state.press_start = now;
         ctx->state.pressed = true;
+#if BUTTON_LONG_PRESS_ENABLE
         ctx->state.long_press = false;
+#endif
 
         // Set flag
         pressed = true;
@@ -285,6 +294,7 @@ esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_
 #if BUTTON_LONG_PRESS_ENABLE
     ctx->long_press_ms = cfg->long_press_ms;
 #endif
+    ctx->continuous_callback = cfg->continuous_callback;
     ctx->on_press = cfg->on_press;
     ctx->on_release = cfg->on_release;
     ctx->arg = cfg->arg;

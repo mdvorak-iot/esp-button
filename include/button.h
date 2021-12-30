@@ -114,8 +114,14 @@ struct button_config
     uint32_t long_press_ms;
 #endif
     /**
+     * @brief Fire BUTTON_EVENT_PRESSED event every BUTTON_DEBOUNCE_MS interval,
+     * until button is released.
+     */
+    bool continuous_callback;
+    /**
      * @brief Button pressed callback. This is should be called once
-     * after button is pressed, and possibly again for long-press.
+     * after button is pressed, and possibly again for long-press,
+     * unless continuous_callback is set to true.
      */
     button_callback_fn on_press;
     /**

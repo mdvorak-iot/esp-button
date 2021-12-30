@@ -37,10 +37,11 @@ void app_main()
     struct button_config btn_cfg =
     {
         .level = EXAMPLE_BUTTON_LEVEL,
+        .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
 #if CONFIG_BUTTON_LONG_PRESS_ENABLE
         .long_press_ms = EXAMPLE_BUTTON_LONG_PRESS_MS,
 #endif
-        .internal_pull = EXAMPLE_BUTTON_INTERNAL_PULL,
+        .continuous_callback = EXAMPLE_BUTTON_CONTINUOUS_CALLBACK,
         .on_press = button_handler,
         .on_release = button_handler,
         .arg = test,
