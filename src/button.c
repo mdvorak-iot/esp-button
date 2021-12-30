@@ -86,6 +86,7 @@ static void BUTTON_IRAM_ATTR handle_button(const struct button_context *ctx, enu
     fire_callback(ctx, &data);
 }
 
+// NOTE that this function actually polls the button in BUTTON_DEBOUNCE_MS intervals, since interrupts are not reliable!
 static void button_timer_handler(void *arg)
 {
     // Dereference

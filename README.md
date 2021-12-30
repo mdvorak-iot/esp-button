@@ -23,3 +23,8 @@ and include either of the header files
 ```
 
 For full example, see [button_example_main.c](example/main/button_example_main.c).
+
+## Development
+
+Load `example/CMakeLists.txt` instead of root project. That will load both functional compilable 
+example and the library itself.
