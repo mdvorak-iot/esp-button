@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sdkconfig.h"
 #include <esp_err.h>
 #include <hal/gpio_types.h>
 #include <stdbool.h>
