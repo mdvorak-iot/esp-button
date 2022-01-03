@@ -1,6 +1,6 @@
 # esp-button
 
-![platformio build](https://github.com/mdvorak-iot/esp-button/workflows/platformio%20build/badge.svg)
+[![build](https://github.com/mdvorak-iot/esp-button/actions/workflows/build.yml/badge.svg)](https://github.com/mdvorak-iot/esp-button/actions/workflows/build.yml)
 
 Button handler, with software debounce logic and long-press support.
 
