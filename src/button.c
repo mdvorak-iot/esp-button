@@ -11,6 +11,12 @@
 #define BUTTON_IRAM_ATTR
 #endif
 
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 2, 0)
+#define ESP_DRAM_LOGI ESP_EARLY_LOGI
+#define ESP_DRAM_LOGD ESP_EARLY_LOGD
+#define ESP_DRAM_LOGV ESP_EARLY_LOGV
+#endif
+
 static const char DRAM_ATTR TAG[] = "button";
 
 static portMUX_TYPE button_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -283,7 +289,9 @@ esp_err_t button_config(gpio_num_t pin, const struct button_config *cfg, button_
         .callback = button_timer_handler,
         .arg = ctx,
         .name = TAG,
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         .skip_unhandled_events = true,
+#endif
     };
     err = esp_timer_create(&timer_cfg, &ctx->timer);
     if (err != ESP_OK)
