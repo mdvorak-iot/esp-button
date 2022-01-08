@@ -1,4 +1,4 @@
-name: Build
+name: build
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     paths-ignore: [ "*.md" ]
 
 jobs:
-  build:
+  idf:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

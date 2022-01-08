@@ -4,7 +4,7 @@
     "keywords": "esp esp32",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mdvorak-iot/esp-button.git"
+        "url": "https://github.com/mdvorak/esp-button.git"
     },
     "authors": [
         {

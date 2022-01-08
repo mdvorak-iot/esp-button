@@ -1,6 +1,6 @@
 # esp-button
 
-[![build](https://github.com/mdvorak-iot/esp-button/actions/workflows/build.yml/badge.svg)](https://github.com/mdvorak-iot/esp-button/actions/workflows/build.yml)
+[![build](https://github.com/mdvorak/esp-button/actions/workflows/build.yml/badge.svg)](https://github.com/mdvorak/esp-button/actions/workflows/build.yml)
 
 Button handler, with software debounce logic and long-press support.
 
@@ -13,7 +13,7 @@ press and release in an interrupt routine).
 To reference this library by your project, add it as git submodule, using command
 
 ```shell
-git submodule add https://github.com/mdvorak-iot/esp-button.git components/button
+git submodule add https://github.com/mdvorak/esp-button.git components/button
 ```
 
 and include either of the header files

@@ -1,6 +1,6 @@
 name: "button"
 description: Button handler, with software debounce logic and long-press support.
-url: https://github.com/mdvorak-iot/esp-button.git
+url: https://github.com/mdvorak/esp-button.git
 dependencies:
   idf:
     version: ">=4.1"
