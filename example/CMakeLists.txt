@@ -5,4 +5,4 @@ list(APPEND EXTRA_COMPONENT_DIRS " ${CMAKE_SOURCE_DIR}/..")
 
 # Project
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esp-button-example)
+project(button_example)
