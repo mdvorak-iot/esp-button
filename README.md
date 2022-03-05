@@ -1,6 +1,6 @@
 # button
 
-[![build](https://github.com/mdvorak/esp-button/actions/workflows/build.yml/badge.svg)](https://github.com/mdvorak/esp-button/actions/workflows/build.yml)
+[![test](https://github.com/mdvorak/esp-button/actions/workflows/test.yml/badge.svg)](https://github.com/mdvorak/esp-button/actions/workflows/test.yml)
 
 Button handler, with software debounce logic and long-press support.
 
