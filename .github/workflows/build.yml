@@ -69,13 +69,21 @@ jobs:
       - name: Build
         run: platformio run -d example
 
+  build-all:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - platformio
+    # Only aggregating job
+    steps:
+      - run: echo OK
+
   upload:
     runs-on: ubuntu-latest
     environment: release
     if: github.ref_type == 'tag'
     needs:
-      - build
-      - platformio
+      - build-all
     steps:
       - uses: actions/checkout@v4
         with:
