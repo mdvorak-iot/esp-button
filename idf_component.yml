@@ -1,6 +1,8 @@
 name: button
 description: Button handler, with software debounce logic and long-press support.
-url: https://github.com/mdvorak/esp-button.git
+url: https://github.com/mdvorak/esp-button
+repository: https://github.com/mdvorak/esp-button
+license: Apache-2.0 license
 dependencies:
   idf:
     version: ">=4.4"
