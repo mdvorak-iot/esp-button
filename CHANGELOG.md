@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.0](https://github.com/mdvorak/esp-button/compare/v1.0.1...v2.0.0) (2024-03-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* no longer support <4.4 IDF
+
+### Features
+
+* no longer support &lt;4.4 IDF ([32092a6](https://github.com/mdvorak/esp-button/commit/32092a6bd8fa7f00bacb0ce81e6ec69fafc72156))
+
+
+### Bug Fixes
+
+* add needed esp_timer for 5.x idf ([32092a6](https://github.com/mdvorak/esp-button/commit/32092a6bd8fa7f00bacb0ce81e6ec69fafc72156))
+
 ### [1.0.1](https://github.com/mdvorak/esp-button/compare/v1.0.0...v1.0.1) (2022-01-22)
 
 
