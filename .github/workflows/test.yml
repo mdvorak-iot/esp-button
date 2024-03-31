@@ -24,7 +24,7 @@ jobs:
         CONFIG_BUTTON_LONG_PRESS_ENABLE: [ y, n ]
         CONFIG_BUTTON_ISR_IN_IRAM: [ y, n ]
         # ESP-IDF versions and targets
-        idf_ver: [ v4.1, v4.2, v4.3, v4.4 ]
+        idf_ver: [ v4.1, v4.2, v4.3, v4.4, v5.1, v5.2 ]
         idf_target: [ esp32, esp32s2, esp32s3, esp32c3, esp32h2 ]
         # Filter out unsupported combinations
         exclude:
