@@ -1,4 +1,4 @@
-name: test
+name: Build
 
 on:
   push:
@@ -31,11 +31,8 @@ jobs:
     container: espressif/idf:release-${{ matrix.idf_ver }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Component Manager
-        run: |
-          . ${IDF_PATH}/export.sh
-          pip install --upgrade idf-component-manager
+        with:
+          submodules: "recursive"
 
       - name: Build
         env:
@@ -52,6 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -69,3 +68,23 @@ jobs:
 
       - name: Build
         run: platformio run -d example
+
+  upload:
+    runs-on: ubuntu-latest
+    environment: release
+    if: github.ref_type == 'tag'
+    needs:
+      - build
+      - platformio
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Upload component to component registry
+        uses: espressif/upload-components-ci-action@v1
+        with:
+          name: ${{ github.event.repository.name }}
+          version: ${{ github.ref_name }}
+          namespace: ${{ github.repository_owner }}
+          api_token: ${{ secrets.ESP_IDF_COMPONENT_API_TOKEN }}
